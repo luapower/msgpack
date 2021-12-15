@@ -42,17 +42,24 @@ function mp.new(self)
 	return setmetatable(self or {}, {__index = mp})
 end
 
-local rcopy, rev = noop, noop
+local rcopy, rev2, rev4, rev8 = noop, noop, noop
 if ffi.abi'le' then
 	function rcopy(dst, src, len)
 		for i = 0, len-1 do
 			dst[i] = src[len-1-i]
 		end
 	end
-	function rev(p, i, len)
-		for i = 0, floor(len/2)-1 do
-			p[i] = p[len-1-i]
-		end
+	function rev2(p, i)
+		local a, b = p[i], p[i+1]
+		p[i], p[i+1] = b, a
+	end
+	function rev4(p, i)
+		local a, b, c, d = p[i], p[i+1], p[i+2], p[i+3]
+		p[i], p[i+1], p[i+2], p[i+3] = d, c, b, a
+	end
+	function rev8(p, i)
+		local a, b, c, d, e, f, g, h = p[i], p[i+1], p[i+2], p[i+3], p[i+4], p[i+5], p[i+6], p[i+7]
+		p[i], p[i+1], p[i+2], p[i+3], p[i+4], p[i+5], p[i+6], p[i+7] = h, g, f, e, d, c, b, a
 	end
 end
 
@@ -195,7 +202,7 @@ function mp:encode_buffer(min_size)
 		local n = n or t.n or #t
 		if n <= 0x0f then
 			local p, i = b(1)
-			p[i] = 0x81 + n
+			p[i] = 0x90 + n
 		else
 			encode_len(n, nil, 0xdc, 0xdd)
 		end
@@ -224,13 +231,13 @@ function mp:encode_buffer(min_size)
 		local p, i = b(5)
 		p[i] = 0xca
 		ffi.cast(f32p, p+i+1)[0] = v
-		rev(p, i+1, 4)
+		rev4(p, i+1)
 	end
 	function buf:encode_double(v)
 		local p, i = b(9)
 		p[i] = 0xcb
 		ffi.cast(f64p, p+i+1)[0] = v
-		rev(p, i+1, 8)
+		rev8(p, i+1)
 	end
 	function buf:encode_bin(v, n)
 		local n = n or #v
@@ -271,7 +278,9 @@ function mp:encode_buffer(min_size)
 		local n = ffi.sizeof(ct)
 		local p, i = b(n)
 		ffi.cast(ct, p+i)[0] = v
-		rev(p, i, n)
+		local rev = n == 1 and noop or n == 2 and rev2
+			or n == 4 and rev4 or n == 8 and rev8
+		rev(p, i)
 	end
 	function buf:encode_timestamp(v)
 		local n
@@ -301,7 +310,7 @@ function mp:encode_buffer(min_size)
 			local p, i = b(1)
 			p[i] = 0xc3
 		elseif type(v) == 'number' then
-			if floor(n) == n then
+			if floor(v) == v and not (v == 0 and 1 / v < 0) then
 				if v < 0 then
 					if v >= -0x20 then
 						local p, i = b(1)
@@ -309,47 +318,51 @@ function mp:encode_buffer(min_size)
 					elseif v >= -0x80 then
 						local p, i = b(2)
 						p[i] = 0xd0
-						ffi.cast(i8p, p+i+1)[0] = n
+						ffi.cast(i8p, p+i+1)[0] = v
 					elseif v >= -0x8000 then
 						local p, i = b(3)
 						p[i] = 0xd1
 						ffi.cast(i16p, p+i+1)[0] = v
-						rev(p, i+1, 2)
+						rev2(p, i+1)
 					elseif v >= -0x80000000 then
 						local p, i = b(5)
 						p[i] = 0xd2
 						ffi.cast(i32p, p+i+1)[0] = v
-						rev(p, i+1, 4)
+						rev4(p, i+1)
 					else
 						local p, i = b(9)
 						p[i] = 0xd3
 						ffi.cast(i64p, p+i+1)[0] = v
-						rev(p, i+1, 8)
+						rev8(p, i+1)
 					end
 				elseif v <= 0x7f then
 					local p, i = b(1)
 					p[i] = v
+				elseif v <= 0xff then
+					local p, i = b(2)
+					p[i] = 0xcc
+					p[i+1] = v
 				elseif v <= 0xffff then
 					local p, i = b(3)
 					p[i] = 0xcd
 					ffi.cast(u16p, p+i+1)[0] = v
-					rev(p, i+1, 2)
+					rev2(p, i+1)
 				elseif v <= 0xffffffff then
 					local p, i = b(5)
 					p[i] = 0xce
 					ffi.cast(u32p, p+i+1)[0] = v
-					rev(p, i+1, 4)
+					rev4(p, i+1)
 				else
 					local p, i = b(9)
 					p[i] = 0xcf
 					ffi.cast(u64p, p+i+1)[0] = v
-					rev(p, i+1, 8)
+					rev8(p, i+1)
 				end
 			else
 				local p, i = b(9)
 				p[i] = 0xcb
 				ffi.cast(f64p, p+i+1)[0] = v
-				rev(p, i+1, 8)
+				rev8(p, i+1)
 			end
 		elseif type(v) == 'string' then
 			if #v <= 0x1f then
@@ -366,16 +379,18 @@ function mp:encode_buffer(min_size)
 			else
 				self:encode_map(v)
 			end
-		elseif ffi.istype(v, i64) then
+		elseif ffi.istype(i64, v) then
 			local p, i = b(9)
 			p[i] = 0xd3
 			ffi.cast(i64p, p+i+1)[0] = v
-			rev(p, i+1, 8)
-		elseif ffi.istype(v, u64) then
+			rev8(p, i+1)
+		elseif ffi.istype(u64, v) then
 			local p, i = b(9)
 			p[i] = 0xcf
 			ffi.cast(u64p, p+i+1)[0] = v
-			rev(p, i+1, 8)
+			rev8(p, i+1)
+		else
+			error('invalid type '..type(v))
 		end
 	end
 	function buf:get()
