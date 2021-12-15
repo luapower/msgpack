@@ -28,6 +28,8 @@ local f32p = glue.f32p
 local f64p = glue.f64p
 
 local noop     = glue.noop
+local repl     = glue.repl
+local update   = glue.update
 local dynarray = glue.dynarray
 
 local t_buf = ffi.new'uint8_t[8]'
@@ -39,7 +41,8 @@ mp.decode_i64 = tonumber
 mp.decode_u64 = tonumber
 
 function mp.new(self)
-	return setmetatable(self or {}, {__index = mp})
+	assert(self ~= mp)
+	return update(self or {}, mp)
 end
 
 local rcopy, rev2, rev4, rev8 = noop, noop, noop
@@ -80,7 +83,7 @@ end
 local obj --fw. decl.
 
 local function arr(self, p, n, i, len)
-	local t = {}
+	local t = {[self.N] = len}
 	for j = 1, len do
 		local v
 		i, v = obj(self, p, n, i)
@@ -174,6 +177,11 @@ end
 
 --encoding -------------------------------------------------------------------
 
+mp.N = {}
+function mp:isarray(v)
+	return v[self.N] and true or false
+end
+
 function mp:encode_buffer(min_size)
 	local buf = {}
 	local arr = dynarray(u8a, min_size)
@@ -199,7 +207,7 @@ function mp:encode_buffer(min_size)
 		end
 	end
 	function buf:encode_array(t, n)
-		local n = n or t.n or #t
+		local n = n or repl(t[mp.N], true, #t) or #t
 		if n <= 0x0f then
 			local p, i = b(1)
 			p[i] = 0x90 + n
@@ -374,7 +382,7 @@ function mp:encode_buffer(min_size)
 			local p, i = b(#v)
 			ffi.copy(p + i, v, #v)
 		elseif type(v) == 'table' then
-			if v[1] ~= nil or next(v) == nil then
+			if mp:isarray(v) then
 				self:encode_array(v)
 			else
 				self:encode_map(v)

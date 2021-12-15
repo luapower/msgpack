@@ -26,12 +26,15 @@ MessagePack v5 decoder and encoder for LuaJIT.
 `mp.decode_u64`                                      `uint64_t` decoder (`tonumber`)
 `mp.decoder[type] = f(mp, p, i, len) -> next_i, v`   add a decoder for an ext type
 `mp:decode_unknown(mp, p, i, len, typ) end`          decode an unknown ext type
+`mp:isarray(t)`                                      decide if `t` is an array or map
+`mp.N`                                               key for array element count
 ---------------------------------------------------- -----------------------------------
 
 Decoding behavior:
 
 * `nil` and `NaN` table keys are skipped, unless `mp.nil_key` / `mp.nan_key` is set.
 * `nil` array elements create Lua sparse arrays, unless `mp.nil_element` is set.
+* array element count is stored in the special `mp.N` key, sparse array or not.
 * extension types are decoded with `mp.decoder[type]`, falling back to
 `mp:decode_unknown()` (pre-defined as a stub that returns `nil`).
 
@@ -39,5 +42,6 @@ Encoding behavior:
 
 * Lua numbers are packed as either integers (the smallest possible) or doubles.
 * 64bit cdata numbers are packed as 64bit integers.
-* Lua tables are packed as arrays (up to `t.n` or `#t`) if `t[1] ~= nil`
-or if `next(t) == nil`, otherwise they're packed as maps.
+* Lua tables are packed as arrays or tables based on `mp:isarray()` which
+by default returns true only if there's a `mp.N` key present in the table
+(which can be `true`, in which case element count is `#t`).
