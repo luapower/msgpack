@@ -205,11 +205,13 @@ function mp:encoding_buffer(min_size)
 			local p, i = b(3)
 			p[i] = u16mark
 			ffi.cast(u16p, p+i+1)[0] = n
+			rev2(p, i+1)
 		else
 			mp.assert(n <= 0xffffffff, 'too many elements')
 			local p, i = b(5)
 			p[i] = u32mark
 			ffi.cast(u32p, p+i+1)[0] = n
+			rev4(p, i+1)
 		end
 	end
 	function buf:encode_array(t, n)
