@@ -84,7 +84,7 @@ end
 local obj --fw. decl.
 
 local function arr(self, p, n, i, len)
-	local t = {[self.N] = len}
+	local t = {}
 	for j = 1, len do
 		local v
 		i, v = obj(self, p, n, i)

@@ -42,11 +42,11 @@ Decoding behavior:
 
 * `nil` and `NaN` table keys are skipped, unless `mp.nil_key` / `mp.nan_key` is set.
 * `nil` array elements create Lua sparse arrays, unless `mp.nil_element` is set.
-* array element count is stored in the special `mp.N` key, sparse array or not.
 * extension types are decoded with `mp.decoder[type]`, falling back to
 `mp:decode_unknown()` (pre-defined as a stub that returns `nil`).
 * decoding errors are raised with `mp.assert()` whih defaults to `assert`
 (see [errors] for why you'd want to replace this).
+* there's no way to tell an empty array from an empty map.
 
 Encoding behavior:
 
