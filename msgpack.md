@@ -4,17 +4,18 @@
 MessagePack v5 decoder and encoder for LuaJIT.
 
 ---------------------------------------------------- -----------------------------------
-`mp.new([mp]) -> mp`                                 create a new mp instance
-`mp:decode_next(p, [n], [i]) -> next_i, v`           decode next value at offset `i` in `p`
-`mp:decode_each(p, [n], [i]) -> iter() -> next_i, v` decode all values
-`mp:encode_buffer([min_size]) -> b`                  create an encoding buffer
-`b:encode(v)`                                        encode a value
+`mp.new([mp]) -> mp`                                 create a new mp instance (optional)
+`mp:decode_next(p, [n], [i]) -> next_i, v`           decode value at offset `i` in `p`
+`mp:decode_each(p, [n], [i]) -> iter() -> next_i, v` decode all values up to `n` bytes
+`mp:encode_buffer([min_size]) -> b`                  create a buffer for encoding
+`b:encode(v)`                                        encode a value (see below)
 `b:encode_array(t, [n])`                             encode an array
 `b:encode_map(t, [pairs])`                           encode a map
 `b:encode_float(x)`                                  encode a float
 `b:encode_double(x)`                                 encode a double
 `b:encode_bin(v, [n])`                               encode a byte array
-`b:encode_ext(v, type, [n])`                         encode an ext value
+`b:encode_ext(type, [n])`                            encode the header for an ext value
+`b:encode_ext_int(ctype, x)`                         encode a raw integer (see code)
 `b:encode_timestamp(ts)`                             encode a timestamp value
 `b:get() -> p, n`                                    get the buffer and its size
 `b:tostring() -> s`                                  get the buffer as a string

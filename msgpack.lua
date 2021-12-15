@@ -2,6 +2,8 @@
 --MessagePack v5 for LuaJIT.
 --Written by Cosmin Apreutesei. Public Domain.
 
+if not ... then require'msgpack_test'; return end
+
 local ffi = require'ffi'
 local bit = require'bit'
 local glue = require'glue'
@@ -57,15 +59,15 @@ end
 --decoding -------------------------------------------------------------------
 
 local function num(p, n, i, ct, len, tonumber)
-	assert(i + len < n)
-	rcopy(t_buf, p + i + 1, len)
+	assert(i + len <= n, 'short read')
+	rcopy(t_buf, p + i, len)
 	local v = ffi.cast(ct, t_buf)[0]
-	return i + len + 1, tonumber and tonumber(v) or v
+	return i + len, tonumber and tonumber(v) or v
 end
 
-local function str(p, n, i, len) --string
-	assert(i + len < n)
-	return i + len + 1, ffi.string(p + i, len)
+local function str(p, n, i, len)
+	assert(i + len <= n, 'short read')
+	return i + len, ffi.string(p + i, len)
 end
 
 local obj --fw. decl.
@@ -78,15 +80,14 @@ local function arr(self, p, n, i, len)
 		if v == nil then v = self.nil_element end
 		t[j] = v
 	end
-	return i + 1, t
+	return i, t
 end
 
 local function ext(self, p, n, i, len)
 	local i, typ = num(p, n, i, i8p, 1)
-	assert(i + len < n)
-	local t = {}
+	assert(i + len <= n, 'short read')
 	local decode = self.decoder[typ] or self.decode_unknown
-	return i + len + 1, decode(self, p, i, len, typ)
+	return i + len, decode(self, p, i, len, typ)
 end
 
 local function map(self, p, n, i, len)
@@ -101,11 +102,11 @@ local function map(self, p, n, i, len)
 			t[k] = v
 		end
 	end
-	return i + 1, t
+	return i, t
 end
 
 --[[local]] function obj(self, p, n, i)
-	assert(i < n)
+	assert(i < n, 'short read')
 	local c = p[i]
 	i = i + 1
 	if c <  0x80 then return i, c end
@@ -119,12 +120,12 @@ end
 	if c == 0xc4 then return str(p, n, num(p, n, i, u8p , 1)) end
 	if c == 0xc5 then return str(p, n, num(p, n, i, u16p, 2)) end
 	if c == 0xc6 then return str(p, n, num(p, n, i, u32p, 4)) end
-	if c == 0xc7 then return ext(self, p, n, num(p, n, i, u8p , 2)) end
-	if c == 0xc8 then return ext(self, p, n, num(p, n, i, u16p, 4)) end
-	if c == 0xc9 then return ext(self, p, n, num(p, n, i, u32p, 8)) end
+	if c == 0xc7 then return ext(self, p, n, num(p, n, i, u8p , 1)) end
+	if c == 0xc8 then return ext(self, p, n, num(p, n, i, u16p, 2)) end
+	if c == 0xc9 then return ext(self, p, n, num(p, n, i, u32p, 4)) end
 	if c == 0xca then return num(p, n, i, f32p, 4) end
 	if c == 0xcb then return num(p, n, i, f64p, 8) end
-	if c == 0xcc then assert(i < n); return i+1, p[i] end
+	if c == 0xcc then assert(i < n, 'short read'); return i+1, p[i] end
 	if c == 0xcd then return num(p, n, i, u16p, 2) end
 	if c == 0xce then return num(p, n, i, u32p, 4) end
 	if c == 0xcf then return num(p, n, i, u64p, 8, self.decode_u64) end
@@ -140,24 +141,26 @@ end
 	if c == 0xd9 then return str(p, n, num(p, n, i, u8p , 1)) end
 	if c == 0xda then return str(p, n, num(p, n, i, u16p, 2)) end
 	if c == 0xdb then return str(p, n, num(p, n, i, u32p, 4)) end
-	if c == 0xdc then return arr(self, p, n, num(p, n, i, u16, 2)) end
-	if c == 0xdd then return arr(self, p, n, num(p, n, i, u32, 4)) end
-	if c == 0xde then return map(self, p, n, num(p, n, i, u16, 2)) end
-	if c == 0xdf then return map(self, p, n, num(p, n, i, u32, 4)) end
-	assert(false)
+	if c == 0xdc then return arr(self, p, n, num(p, n, i, u16p, 2)) end
+	if c == 0xdd then return arr(self, p, n, num(p, n, i, u32p, 4)) end
+	if c == 0xde then return map(self, p, n, num(p, n, i, u16p, 2)) end
+	if c == 0xdf then return map(self, p, n, num(p, n, i, u32p, 4)) end
+	assert(false, 'invalid message')
 end
 
 function mp:decode_next(p, n, i)
+	p = ffi.cast(u8p, p)
 	return obj(self, p, n, i or 0)
 end
 
 function mp:decode_each(p, n, i)
 	i = i or 0
 	n = n or #p
+	p = ffi.cast(u8p, p)
 	return function()
 		if i >= n then return nil end
 		local v
-		i, v = self:decode_next(p, n, i)
+		i, v = obj(self, p, n, i)
 		return i, v
 	end
 end
@@ -182,7 +185,7 @@ function mp:encode_buffer(min_size)
 			p[i] = u16mark
 			ffi.cast(u16p, p+i+1)[0] = n
 		else
-			assert(n <= 0xffffffff)
+			assert(n <= 0xffffffff, 'too many elements')
 			local p, i = b(5)
 			p[i] = u32mark
 			ffi.cast(u32p, p+i+1)[0] = n
@@ -237,7 +240,7 @@ function mp:encode_buffer(min_size)
 	end
 	function buf:encode_ext(typ, n)
 		local n = n or #v
-		assert(n > 0)
+		assert(n > 0, 'zero bytes ext')
 		if n == 1 then
 			local p, i = b(2)
 			p[i] = 0xd4
@@ -264,7 +267,7 @@ function mp:encode_buffer(min_size)
 			p[i] = typ
 		end
 	end
-	function buf:encode_ext_num(ct, x)
+	function buf:encode_ext_int(ct, x)
 		local n = ffi.sizeof(ct)
 		local p, i = b(n)
 		ffi.cast(ct, p+i)[0] = v
@@ -275,16 +278,16 @@ function mp:encode_buffer(min_size)
 		if v >= 0 and v <= 0xffffffff then
 			if floor(v) == v then
 				self:encode_ext(-1, 4)
-				self:encode_ext_num(u32, v)
+				self:encode_ext_int(u32, v)
 			else
 				self:encode_ext(-1, 8)
-				self:encode_ext_num(u32, (v - floor(v)) * 1e9)
-				self:encode_ext_num(u32, v)
+				self:encode_ext_int(u32, (v - floor(v)) * 1e9)
+				self:encode_ext_int(u32, v)
 			end
 		else
 			self:encode_ext(-1, 4+8)
-			self:encode_ext_num(u32, (v - floor(v)) * 1e9)
-			self:encode_ext_num(i64, v)
+			self:encode_ext_int(u32, (v - floor(v)) * 1e9)
+			self:encode_ext_int(i64, v)
 		end
 	end
 	function buf:encode(v)
