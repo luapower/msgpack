@@ -189,7 +189,7 @@ function mp.array(...)
 end
 
 function mp.toarray(t, n)
-	t[mp.N] = n or #t
+	t[mp.N] = n or t[mp.N] or #t
 	return t
 end
 
