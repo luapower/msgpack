@@ -5,9 +5,11 @@ MessagePack v5 decoder and encoder for LuaJIT.
 
 ---------------------------------------------------- -----------------------------------
 `mp.new([mp]) -> mp`                                 create a new mp instance (optional)
+__Decoding__
 `mp:decode_next(p, [n], [i]) -> next_i, v`           decode value at offset `i` in `p`
 `mp:decode_each(p, [n], [i]) -> iter() -> next_i, v` decode all values up to `n` bytes
 `mp:encode_buffer([min_size]) -> b`                  create a buffer for encoding
+__Encoding__
 `b:encode(v)`                                        encode a value (see below)
 `b:encode_array(t, [n])`                             encode an array
 `b:encode_map(t, [pairs])`                           encode a map
@@ -19,6 +21,7 @@ MessagePack v5 decoder and encoder for LuaJIT.
 `b:encode_timestamp(ts)`                             encode a timestamp value
 `b:get() -> p, n`                                    get the buffer and its size
 `b:tostring() -> s`                                  get the buffer as a string
+__Customization__
 `mp.nil_key`                                         value to decode nil keys to (skip)
 `mp.nan_key`                                         value to decode NaN keys to (skip)
 `mp.nil_element`                                     value to decode nil array elements to (`nil`)
@@ -28,6 +31,7 @@ MessagePack v5 decoder and encoder for LuaJIT.
 `mp:decode_unknown(mp, p, i, len, type_code) end`    decode an unknown ext type
 `mp:isarray(t)`                                      decide if `t` is an array or map
 `mp.N`                                               key for array element count
+`mp.assert(x, err)`                                  custom assert
 ---------------------------------------------------- -----------------------------------
 
 Decoding behavior:
@@ -37,11 +41,13 @@ Decoding behavior:
 * array element count is stored in the special `mp.N` key, sparse array or not.
 * extension types are decoded with `mp.decoder[type]`, falling back to
 `mp:decode_unknown()` (pre-defined as a stub that returns `nil`).
+* decoding errors are raised with `mp.assert()` whih defaults to `assert`
+(see [errors] for why you'd want to replace this).
 
 Encoding behavior:
 
 * Lua numbers are packed as either integers (the smallest possible) or doubles.
 * 64bit cdata numbers are packed as 64bit integers.
-* Lua tables are packed as arrays or tables based on `mp:isarray()` which
+* Lua tables are encoded as arrays or maps based on `mp:isarray()` which
 by default returns true only if there's a `mp.N` key present in the table
-(which can be `true`, in which case element count is `#t`).
+(if `[mp.N] = true` then element count is `#t`).

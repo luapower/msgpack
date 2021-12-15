@@ -36,9 +36,10 @@ local t_buf = ffi.new'uint8_t[8]'
 
 local mp = {decoder = {}}
 
-function mp:decode_unknown() return nil end
-mp.decode_i64 = tonumber
-mp.decode_u64 = tonumber
+function mp:decode_unknown() return nil end --stub
+mp.decode_i64 = tonumber --stub
+mp.decode_u64 = tonumber --stub
+mp.assert = assert --stub
 
 function mp.new(self)
 	assert(self ~= mp)
@@ -68,15 +69,15 @@ end
 
 --decoding -------------------------------------------------------------------
 
-local function num(p, n, i, ct, len, tonumber)
-	assert(i + len <= n, 'short read')
+local function num(self, p, n, i, ct, len, tonumber)
+	self.assert(i + len <= n, 'short read')
 	rcopy(t_buf, p + i, len)
 	local v = ffi.cast(ct, t_buf)[0]
 	return i + len, tonumber and tonumber(v) or v
 end
 
-local function str(p, n, i, len)
-	assert(i + len <= n, 'short read')
+local function str(self, p, n, i, len)
+	self.assert(i + len <= n, 'short read')
 	return i + len, ffi.string(p + i, len)
 end
 
@@ -94,8 +95,8 @@ local function arr(self, p, n, i, len)
 end
 
 local function ext(self, p, n, i, len)
-	local i, typ = num(p, n, i, i8p, 1)
-	assert(i + len <= n, 'short read')
+	local i, typ = num(self, p, n, i, i8p, 1)
+	self.assert(i + len <= n, 'short read')
 	local decode = self.decoder[typ] or self.decode_unknown
 	return i + len, decode(self, p, i, len, typ)
 end
@@ -116,46 +117,46 @@ local function map(self, p, n, i, len)
 end
 
 --[[local]] function obj(self, p, n, i)
-	assert(i < n, 'short read')
+	self.assert(i < n, 'short read')
 	local c = p[i]
 	i = i + 1
 	if c <  0x80 then return i, c end
 	if c <  0x90 then return map(self, p, n, i, band(c, 0x0f)) end
 	if c <  0xa0 then return arr(self, p, n, i, band(c, 0x0f)) end
-	if c <  0xc0 then return str(p, n, i, band(c, 0x1f)) end
+	if c <  0xc0 then return str(self, p, n, i, band(c, 0x1f)) end
 	if c >  0xdf then return i, ffi.cast(i8p, p)[i-1] end
 	if c == 0xc0 then return i, nil end
 	if c == 0xc2 then return i, false end
 	if c == 0xc3 then return i, true end
-	if c == 0xc4 then return str(p, n, num(p, n, i, u8p , 1)) end
-	if c == 0xc5 then return str(p, n, num(p, n, i, u16p, 2)) end
-	if c == 0xc6 then return str(p, n, num(p, n, i, u32p, 4)) end
-	if c == 0xc7 then return ext(self, p, n, num(p, n, i, u8p , 1)) end
-	if c == 0xc8 then return ext(self, p, n, num(p, n, i, u16p, 2)) end
-	if c == 0xc9 then return ext(self, p, n, num(p, n, i, u32p, 4)) end
-	if c == 0xca then return num(p, n, i, f32p, 4) end
-	if c == 0xcb then return num(p, n, i, f64p, 8) end
-	if c == 0xcc then assert(i < n, 'short read'); return i+1, p[i] end
-	if c == 0xcd then return num(p, n, i, u16p, 2) end
-	if c == 0xce then return num(p, n, i, u32p, 4) end
-	if c == 0xcf then return num(p, n, i, u64p, 8, self.decode_u64) end
-	if c == 0xd0 then return num(p, n, i, i8p , 1) end
-	if c == 0xd1 then return num(p, n, i, i16p, 2) end
-	if c == 0xd2 then return num(p, n, i, i32p, 4) end
-	if c == 0xd3 then return num(p, n, i, i64p, 8, self.decode_i64) end
+	if c == 0xc4 then return str(self, p, n, num(self, p, n, i, u8p , 1)) end
+	if c == 0xc5 then return str(self, p, n, num(self, p, n, i, u16p, 2)) end
+	if c == 0xc6 then return str(self, p, n, num(self, p, n, i, u32p, 4)) end
+	if c == 0xc7 then return ext(self, p, n, num(self, p, n, i, u8p , 1)) end
+	if c == 0xc8 then return ext(self, p, n, num(self, p, n, i, u16p, 2)) end
+	if c == 0xc9 then return ext(self, p, n, num(self, p, n, i, u32p, 4)) end
+	if c == 0xca then return num(self, p, n, i, f32p, 4) end
+	if c == 0xcb then return num(self, p, n, i, f64p, 8) end
+	if c == 0xcc then self.assert(i < n, 'short read'); return i+1, p[i] end
+	if c == 0xcd then return num(self, p, n, i, u16p, 2) end
+	if c == 0xce then return num(self, p, n, i, u32p, 4) end
+	if c == 0xcf then return num(self, p, n, i, u64p, 8, self.decode_u64) end
+	if c == 0xd0 then return num(self, p, n, i, i8p , 1) end
+	if c == 0xd1 then return num(self, p, n, i, i16p, 2) end
+	if c == 0xd2 then return num(self, p, n, i, i32p, 4) end
+	if c == 0xd3 then return num(self, p, n, i, i64p, 8, self.decode_i64) end
 	if c == 0xd4 then return ext(self, p, n, i,  1) end
 	if c == 0xd5 then return ext(self, p, n, i,  2) end
 	if c == 0xd6 then return ext(self, p, n, i,  4) end
 	if c == 0xd7 then return ext(self, p, n, i,  8) end
 	if c == 0xd8 then return ext(self, p, n, i, 16) end
-	if c == 0xd9 then return str(p, n, num(p, n, i, u8p , 1)) end
-	if c == 0xda then return str(p, n, num(p, n, i, u16p, 2)) end
-	if c == 0xdb then return str(p, n, num(p, n, i, u32p, 4)) end
-	if c == 0xdc then return arr(self, p, n, num(p, n, i, u16p, 2)) end
-	if c == 0xdd then return arr(self, p, n, num(p, n, i, u32p, 4)) end
-	if c == 0xde then return map(self, p, n, num(p, n, i, u16p, 2)) end
-	if c == 0xdf then return map(self, p, n, num(p, n, i, u32p, 4)) end
-	assert(false, 'invalid message')
+	if c == 0xd9 then return str(self, p, n, num(self, p, n, i, u8p , 1)) end
+	if c == 0xda then return str(self, p, n, num(self, p, n, i, u16p, 2)) end
+	if c == 0xdb then return str(self, p, n, num(self, p, n, i, u32p, 4)) end
+	if c == 0xdc then return arr(self, p, n, num(self, p, n, i, u16p, 2)) end
+	if c == 0xdd then return arr(self, p, n, num(self, p, n, i, u32p, 4)) end
+	if c == 0xde then return map(self, p, n, num(self, p, n, i, u16p, 2)) end
+	if c == 0xdf then return map(self, p, n, num(self, p, n, i, u32p, 4)) end
+	self.assert(false, 'invalid message')
 end
 
 function mp:decode_next(p, n, i)
@@ -183,6 +184,7 @@ function mp:isarray(v)
 end
 
 function mp:encode_buffer(min_size)
+	local mp = self
 	local buf = {}
 	local arr = dynarray(u8a, min_size)
 	local n = 0
@@ -200,7 +202,7 @@ function mp:encode_buffer(min_size)
 			p[i] = u16mark
 			ffi.cast(u16p, p+i+1)[0] = n
 		else
-			assert(n <= 0xffffffff, 'too many elements')
+			mp.assert(n <= 0xffffffff, 'too many elements')
 			local p, i = b(5)
 			p[i] = u32mark
 			ffi.cast(u32p, p+i+1)[0] = n
@@ -255,7 +257,7 @@ function mp:encode_buffer(min_size)
 	end
 	function buf:encode_ext(typ, n)
 		local n = n or #v
-		assert(n > 0, 'zero bytes ext')
+		mp.assert(n > 0, 'zero bytes ext')
 		if n == 1 then
 			local p, i = b(2)
 			p[i] = 0xd4
