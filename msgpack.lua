@@ -188,6 +188,11 @@ function mp.array(...)
 	return {[mp.N] = select('#', ...), ...}
 end
 
+function mp.toarray(t, n)
+	t[mp.N] = n or #t
+	return t
+end
+
 function mp:encoding_buffer(min_size)
 	local mp = self
 	local buf = {}

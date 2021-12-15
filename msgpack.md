@@ -24,7 +24,8 @@ __Encoding__
 `b:get() -> p, n`                                    get the buffer and its size
 `b:tostring() -> s`                                  get the buffer as a string
 `b:reset() -> b`                                     reset the buffer for reuse
-`mp.array(...) -> t`                                 create an encodable sparse array
+`mp.array(...) -> t`                                 create an encodable array from args
+`mp.toarray(t, [n]) -> t`                            add `mp.N` to table `t`
 __Customization__
 `mp.nil_key`                                         value to decode nil keys to (skip)
 `mp.nan_key`                                         value to decode NaN keys to (skip)
