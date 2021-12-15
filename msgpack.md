@@ -35,7 +35,7 @@ __Customization__
 `mp:decode_unknown(mp, p, i, len, type_code) end`    decode an unknown ext type
 `mp:isarray(t)`                                      decide if `t` is an array or map
 `mp.N`                                               key for array element count
-`mp.assert(x, err)`                                  custom assert
+`mp.error(err)`                                      custom error constructor
 ---------------------------------------------------- -----------------------------------
 
 Decoding behavior:
@@ -44,7 +44,7 @@ Decoding behavior:
 * `nil` array elements create Lua sparse arrays, unless `mp.nil_element` is set.
 * extension types are decoded with `mp.decoder[type]`, falling back to
 `mp:decode_unknown()` (pre-defined as a stub that returns `nil`).
-* decoding errors are raised with `mp.assert()` whih defaults to `assert`
+* decoding errors are raised with `mp.error()` which defaults to `error`
 (see [errors] for why you'd want to replace this).
 * there's no way to tell an empty array from an empty map.
 

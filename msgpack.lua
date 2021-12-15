@@ -39,7 +39,7 @@ local mp = {decoder = {}}
 function mp:decode_unknown() return nil end --stub
 mp.decode_i64 = tonumber --stub
 mp.decode_u64 = tonumber --stub
-mp.assert = assert --stub
+mp.error = error --stub
 
 function mp.new(self)
 	assert(self ~= mp)
@@ -70,43 +70,43 @@ end
 --decoding -------------------------------------------------------------------
 
 local function num(self, p, n, i, ct, len, tonumber)
-	self.assert(i + len <= n, 'short read')
+	if i + len > n then self.error'short read' end
 	rcopy(t_buf, p + i, len)
 	local v = ffi.cast(ct, t_buf)[0]
 	return i + len, tonumber and tonumber(v) or v
 end
 
 local function str(self, p, n, i, len)
-	self.assert(i + len <= n, 'short read')
+	if i + len > n then self.error'short read' end
 	return i + len, ffi.string(p + i, len)
+end
+
+local function ext(self, p, n, i, len)
+	local i, typ = num(self, p, n, i, i8p, 1)
+	if i + len > n then self.error'short read' end
+	local decode = self.decoder[typ] or self.decode_unknown
+	return i + len, decode(self, p, i, len, typ)
 end
 
 local obj --fw. decl.
 
-local function arr(self, p, n, i, len)
+local function arr(self, d, p, n, i, len)
 	local t = {}
 	for j = 1, len do
 		local v
-		i, v = obj(self, p, n, i)
+		i, v = obj(self, d+1, p, n, i)
 		if v == nil then v = self.nil_element end
 		t[j] = v
 	end
 	return i, t
 end
 
-local function ext(self, p, n, i, len)
-	local i, typ = num(self, p, n, i, i8p, 1)
-	self.assert(i + len <= n, 'short read')
-	local decode = self.decoder[typ] or self.decode_unknown
-	return i + len, decode(self, p, i, len, typ)
-end
-
-local function map(self, p, n, i, len)
+local function map(self, d, p, n, i, len)
 	local t = {}
 	for j = 1, len do
 		local k, v
-		i, k = obj(self, p, n, i)
-		i, v = obj(self, p, n, i)
+		i, k = obj(self, d+1, p, n, i)
+		i, v = obj(self, d+1, p, n, i)
 		if k == nil then k = self.nil_key end
 		if k == 1/0 then k = self.nan_key end
 		if k ~= nil and k == k then
@@ -116,13 +116,14 @@ local function map(self, p, n, i, len)
 	return i, t
 end
 
---[[local]] function obj(self, p, n, i)
-	self.assert(i < n, 'short read')
+--[[local]] function obj(self, d, p, n, i)
+	if i >= n   then self.error'short read' end
+	if d >= 100 then self.error'stack overflow' end
 	local c = p[i]
 	i = i + 1
 	if c <  0x80 then return i, c end
-	if c <  0x90 then return map(self, p, n, i, band(c, 0x0f)) end
-	if c <  0xa0 then return arr(self, p, n, i, band(c, 0x0f)) end
+	if c <  0x90 then return map(self, d, p, n, i, band(c, 0x0f)) end
+	if c <  0xa0 then return arr(self, d, p, n, i, band(c, 0x0f)) end
 	if c <  0xc0 then return str(self, p, n, i, band(c, 0x1f)) end
 	if c >  0xdf then return i, ffi.cast(i8p, p)[i-1] end
 	if c == 0xc0 then return i, nil end
@@ -136,7 +137,7 @@ end
 	if c == 0xc9 then return ext(self, p, n, num(self, p, n, i, u32p, 4)) end
 	if c == 0xca then return num(self, p, n, i, f32p, 4) end
 	if c == 0xcb then return num(self, p, n, i, f64p, 8) end
-	if c == 0xcc then self.assert(i < n, 'short read'); return i+1, p[i] end
+	if c == 0xcc then if i >= n then self.error'short read' end; return i+1, p[i] end
 	if c == 0xcd then return num(self, p, n, i, u16p, 2) end
 	if c == 0xce then return num(self, p, n, i, u32p, 4) end
 	if c == 0xcf then return num(self, p, n, i, u64p, 8, self.decode_u64) end
@@ -152,16 +153,16 @@ end
 	if c == 0xd9 then return str(self, p, n, num(self, p, n, i, u8p , 1)) end
 	if c == 0xda then return str(self, p, n, num(self, p, n, i, u16p, 2)) end
 	if c == 0xdb then return str(self, p, n, num(self, p, n, i, u32p, 4)) end
-	if c == 0xdc then return arr(self, p, n, num(self, p, n, i, u16p, 2)) end
-	if c == 0xdd then return arr(self, p, n, num(self, p, n, i, u32p, 4)) end
-	if c == 0xde then return map(self, p, n, num(self, p, n, i, u16p, 2)) end
-	if c == 0xdf then return map(self, p, n, num(self, p, n, i, u32p, 4)) end
-	self.assert(false, 'invalid message')
+	if c == 0xdc then return arr(self, d, p, n, num(self, p, n, i, u16p, 2)) end
+	if c == 0xdd then return arr(self, d, p, n, num(self, p, n, i, u32p, 4)) end
+	if c == 0xde then return map(self, d, p, n, num(self, p, n, i, u16p, 2)) end
+	if c == 0xdf then return map(self, d, p, n, num(self, p, n, i, u32p, 4)) end
+	self.error'invalid message'
 end
 
 function mp:decode_next(p, n, i)
 	p = ffi.cast(u8p, p)
-	return obj(self, p, n, i or 0)
+	return obj(self, 0, p, n, i or 0)
 end
 
 function mp:decode_each(p, n, i)
@@ -171,7 +172,7 @@ function mp:decode_each(p, n, i)
 	return function()
 		if i >= n then return nil end
 		local v
-		i, v = obj(self, p, n, i)
+		i, v = obj(self, 0, p, n, i)
 		return i, v
 	end
 end
@@ -207,7 +208,7 @@ function mp:encoding_buffer(min_size)
 			ffi.cast(u16p, p+i+1)[0] = n
 			rev2(p, i+1)
 		else
-			mp.assert(n <= 0xffffffff, 'too many elements')
+			if n > 0xffffffff then mp.error'too many elements' end
 			local p, i = b(5)
 			p[i] = u32mark
 			ffi.cast(u32p, p+i+1)[0] = n
@@ -332,7 +333,7 @@ function mp:encoding_buffer(min_size)
 	end
 	function buf:encode_ext(typ, n)
 		local n = n or #v
-		mp.assert(n > 0, 'zero bytes ext')
+		if n <= 0 then mp.error'zero bytes ext' end
 		if n == 1 then
 			local p, i = b(2)
 			p[i] = 0xd4
