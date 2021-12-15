@@ -8,19 +8,23 @@ MessagePack v5 decoder and encoder for LuaJIT.
 __Decoding__
 `mp:decode_next(p, [n], [i]) -> next_i, v`           decode value at offset `i` in `p`
 `mp:decode_each(p, [n], [i]) -> iter() -> next_i, v` decode all values up to `n` bytes
-`mp:encode_buffer([min_size]) -> b`                  create a buffer for encoding
 __Encoding__
-`b:encode(v)`                                        encode a value (see below)
-`b:encode_array(t, [n])`                             encode an array
-`b:encode_map(t, [pairs])`                           encode a map
-`b:encode_float(x)`                                  encode a float
-`b:encode_double(x)`                                 encode a double
-`b:encode_bin(v, [n])`                               encode a byte array
-`b:encode_ext(type, [n])`                            encode the header for an ext value
-`b:encode_ext_int(ctype, x)`                         encode a raw integer (see code)
-`b:encode_timestamp(ts)`                             encode a timestamp value
+`mp:encoding_buffer([min_size]) -> b`                create a buffer for encoding
+`b:encode(v) -> b`                                   encode a value (see below)
+`b:encode_array(t, [n]) -> b`                        encode an array
+`b:encode_map(t, [pairs]) -> b`                      encode a map
+`b:encode_int(x) -> b`                               encode a number as integer
+`b:encode_float(x) -> b`                             encode a float
+`b:encode_double(x) -> b`                            encode a double
+`b:encode_bin(v, [n]) -> b`                          encode a byte array
+`b:encode_ext(type, [n]) -> b`                       encode the header for an ext value
+`b:encode_ext_int(ctype, x) -> b`                    encode a raw integer (see code)
+`b:encode_timestamp(ts) -> b`                        encode a timestamp value
+`b:size() -> n`                                      get the buffer content size
 `b:get() -> p, n`                                    get the buffer and its size
 `b:tostring() -> s`                                  get the buffer as a string
+`b:reset() -> b`                                     reset the buffer for reuse
+`mp.array(...) -> t`                                 create an encodable sparse array
 __Customization__
 `mp.nil_key`                                         value to decode nil keys to (skip)
 `mp.nan_key`                                         value to decode NaN keys to (skip)
@@ -49,5 +53,7 @@ Encoding behavior:
 * Lua numbers are packed as either integers (the smallest possible) or doubles.
 * 64bit cdata numbers are packed as 64bit integers.
 * Lua tables are encoded as arrays or maps based on `mp:isarray()` which
-by default returns true only if there's a `mp.N` key present in the table
-(if `[mp.N] = true` then element count is `#t`).
+by default returns `true` only if there's a `mp.N` key present in the table.
+Use `mp.array()` to make a Lua table that will be encoded as an array
+or call `b:encode_array()` on any table.
+* you can set `[mp.N] = true` in the array to mean that the element count is `#t`.
