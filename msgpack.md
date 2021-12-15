@@ -25,7 +25,7 @@ MessagePack v5 decoder and encoder for LuaJIT.
 `mp.decode_i64`                                      `int64_t` decoder (`tonumber`)
 `mp.decode_u64`                                      `uint64_t` decoder (`tonumber`)
 `mp.decoder[type] = f(mp, p, i, len) -> next_i, v`   add a decoder for an ext type
-`mp:decode_unknown(mp, p, i, len, typ) end`          decode an unknown ext type
+`mp:decode_unknown(mp, p, i, len, type_code) end`    decode an unknown ext type
 `mp:isarray(t)`                                      decide if `t` is an array or map
 `mp.N`                                               key for array element count
 ---------------------------------------------------- -----------------------------------
